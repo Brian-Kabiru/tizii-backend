@@ -1,15 +1,19 @@
-// src/routes/index.ts
-import { Router } from "express";
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import authRoutes from "./authRoutes";
 
-const router = Router();
+dotenv.config();
+const app = express();
 
-router.get("/", (req, res) => {
-  res.send("Welcome to Tizii API 🌍");
+app.use(cors());
+app.use(express.json());
+
+app.use("/auth", authRoutes);
+
+app.get("/", (req, res) => {
+  res.send("Tizii API is running 🚀");
 });
 
-// Example placeholder route
-router.get("/users", (req, res) => {
-  res.json({ message: "List of users will appear here soon" });
-});
-
-export default router;
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
