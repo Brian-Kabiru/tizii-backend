@@ -5,6 +5,7 @@ import {
   getStudioById,
   deleteStudio,
   updateStudio,
+  createStudioManager, // <-- added
 } from "../controllers/studioController";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { authorize } from "../middleware/authorize";
@@ -16,7 +17,16 @@ const router = express.Router();
 router.get("/", getStudios as unknown as RequestHandler);
 router.get("/:id", getStudioById as unknown as RequestHandler);
 
-// Protected routes (RBAC)
+// Admin-only route: create a new studio manager
+// POST /api/studios/managers
+router.post(
+  "/managers",
+  authMiddleware,
+  authorize("admin"),
+  createStudioManager as unknown as RequestHandler
+);
+
+// Protected routes (RBAC) for studios
 router.post(
   "/",
   authMiddleware,

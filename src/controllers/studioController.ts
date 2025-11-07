@@ -143,3 +143,78 @@ export const deleteStudio = async (req: AuthenticatedRequest, res: Response) => 
     res.status(500).json({ error: "Failed to delete studio" });
   }
 };
+/**
+ * 🧑‍💼 Create a Studio Manager (Admin only)
+ */
+export const createStudioManager = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    // Only Admin can create Studio Managers
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Forbidden: Only admins can create studio managers" });
+    }
+
+    const { full_name, email, phone, password, studio_id } = req.body;
+
+    // Validate required fields
+    if (!email || !password || !full_name) {
+      return res.status(400).json({ error: "Full name, email, and password are required" });
+    }
+
+    // Check if user exists
+    const existingUser = await prisma.users.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({ error: "A user with this email already exists" });
+    }
+
+    // Optional: validate studio ID
+    if (studio_id) {
+      const studio = await prisma.studios.findUnique({ where: { id: studio_id } });
+      if (!studio) {
+        return res.status(404).json({ error: "Studio not found" });
+      }
+    }
+
+    // Hash password
+    const bcrypt = await import("bcryptjs");
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user with role studio_manager
+    const newManager = await prisma.users.create({
+      data: {
+        full_name,
+        email,
+        phone,
+        password_hash: hashedPassword,
+        role: "studio_manager",
+      },
+      select: {
+        id: true,
+        full_name: true,
+        email: true,
+        phone: true,
+        role: true,
+        created_at: true,
+      },
+    });
+
+    // Optionally assign the manager as the studio owner (optional)
+    if (studio_id) {
+      await prisma.studios.update({
+        where: { id: studio_id },
+        data: { owner_id: newManager.id },
+      });
+    }
+
+    res.status(201).json({
+      message: "Studio manager created successfully",
+      user: newManager,
+    });
+  } catch (error) {
+    console.error("Error creating studio manager:", error);
+    res.status(500).json({ error: "Failed to create studio manager" });
+  }
+};
