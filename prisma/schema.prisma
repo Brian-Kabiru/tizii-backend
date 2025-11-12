@@ -32,6 +32,9 @@ model studios {
   price_per_hour    Decimal             @db.Decimal(10, 2)
   amenities         String[]
   verified          Boolean?            @default(false)
+  paybill_number    String?             // studio paybill (BusinessShortCode)
+  till_number       String?             // studio till number (for buy goods)
+  payment_type      String?             @default("till") // 'paybill' or 'till'
   created_at        DateTime?           @default(now()) @db.Timestamptz(6)
   bookings          bookings[]
   practice_sessions practice_sessions[]
@@ -42,9 +45,10 @@ model bookings {
   id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   artist_id         String?             @db.Uuid
   studio_id         String?             @db.Uuid
-  start_time        DateTime            @db.Timestamptz(6)
-  end_time          DateTime            @db.Timestamptz(6)
-  duration_minutes  Int
+  // Keep these for backward compatibility (single-slot legacy)
+  start_time        DateTime?           @db.Timestamptz(6)
+  end_time          DateTime?           @db.Timestamptz(6)
+  duration_minutes  Int?
   amount            Decimal             @db.Decimal(10, 2)
   currency          String?             @default("KES")
   status            String?             @default("pending")
@@ -54,6 +58,16 @@ model bookings {
   studios           studios?            @relation(fields: [studio_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   payments          payments[]
   practice_sessions practice_sessions[]
+  booking_slots     booking_slots[]
+}
+
+model booking_slots {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  booking_id  String   @db.Uuid
+  start_time  DateTime @db.Timestamptz(6)
+  end_time    DateTime @db.Timestamptz(6)
+  booking     bookings @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  @@index([booking_id])
 }
 
 model payments {
@@ -69,10 +83,14 @@ model payments {
   mpesa_checkout_request_id String?
   mpesa_result_code         Int?
   mpesa_result_desc         String?
+  mpesa_account_reference   String?   // account reference supplied in STK Push (important for Paybill)
+  mpesa_paybill_number      String?   // stored for audit (which paybill was used)
+  mpesa_till_number         String?   // stored for audit (which till was used)
   raw_response              Json?
   created_at                DateTime? @default(now()) @db.Timestamptz(6)
   updated_at                DateTime? @updatedAt
   bookings                  bookings? @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  @@index([booking_id])
 }
 
 model practice_sessions {

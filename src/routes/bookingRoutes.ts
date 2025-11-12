@@ -1,31 +1,72 @@
-import express from "express";
+// src/routes/bookingRoutes.ts
+import express, { Request, Response } from "express";
 import {
   getBookings,
   getBookingById,
   createBooking,
-  payBookingMpesa,
   updateBookingStatus,
   deleteBooking,
 } from "../controllers/bookingController";
+import { initiatePayment } from "../controllers/paymentController";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { authorize } from "../middleware/authorize";
+import { AuthenticatedRequest } from "../middleware/authMiddleware";
 
 const router = express.Router();
 
-// Artists can view and create bookings (artists + admins can GET)
-router.get("/", authMiddleware, authorize("artist", "studio_manager", "admin"), getBookings);
-router.get("/:id", authMiddleware, authorize("artist", "studio_manager", "admin"), getBookingById);
+/**
+ * Helper to wrap handlers using AuthenticatedRequest
+ */
+const authHandler = (
+  handler: (req: AuthenticatedRequest, res: Response) => any
+) => (req: Request, res: Response) => handler(req as AuthenticatedRequest, res);
 
-// Only artists create bookings
-router.post("/", authMiddleware, authorize("artist"), createBooking);
+// GET /bookings - role-based list
+router.get(
+  "/",
+  authMiddleware,
+  authorize("artist", "studio_manager", "admin"),
+  authHandler(getBookings)
+);
 
-// Trigger MPESA STK push (artist pays for their booking)
-router.post("/pay", authMiddleware, authorize("artist", "admin"), payBookingMpesa);
+// GET /bookings/:id - single booking
+router.get(
+  "/:id",
+  authMiddleware,
+  authorize("artist", "studio_manager", "admin"),
+  authHandler(getBookingById)
+);
 
-// Admin and studio_manager can update status (studio_manager only for their studios)
-router.patch("/:id/status", authMiddleware, authorize("studio_manager", "admin"), updateBookingStatus);
+// POST /bookings - create multi-slot/multi-day booking (artists only)
+router.post(
+  "/",
+  authMiddleware,
+  authorize("artist"),
+  authHandler(createBooking)
+);
 
-// Only admin deletes
-router.delete("/:id", authMiddleware, authorize("admin"), deleteBooking);
+// POST /bookings/pay - trigger MPESA STK push for a booking
+router.post(
+  "/pay",
+  authMiddleware,
+  authorize("artist", "admin"),
+  authHandler(initiatePayment)
+);
+
+// PATCH /bookings/:id/status - update booking status
+router.patch(
+  "/:id/status",
+  authMiddleware,
+  authorize("studio_manager", "admin"),
+  authHandler(updateBookingStatus)
+);
+
+// DELETE /bookings/:id - admin only
+router.delete(
+  "/:id",
+  authMiddleware,
+  authorize("admin"),
+  authHandler(deleteBooking)
+);
 
 export default router;
