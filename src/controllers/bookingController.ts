@@ -96,20 +96,29 @@ export const getBookingById = async (req: AuthenticatedRequest, res: Response) =
 };
 
 // ---------------------- POST /bookings ----------------------
+interface SlotInput {
+  start_time: string | Date;
+  end_time: string | Date;
+}
+
+interface CreateBookingBody {
+  studio_id: string;
+  slots: SlotInput[];
+  currency?: string;
+}
+
+interface ValidatedSlot {
+  start: Date;
+  end: Date;
+  duration: number;
+}
+
 export const createBooking = async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const artist_id = req.user.id;
 
-    const artist_id: string = req.user.id;
-
-    // Request body types
-    type SlotInput = { start_time: string | Date; end_time: string | Date };
-    interface CreateBookingBody {
-      studio_id: string;
-      slots: SlotInput[];
-      currency?: string;
-    }
-    const { studio_id, slots, currency }: CreateBookingBody = req.body;
+    const { studio_id, slots, currency } = req.body as CreateBookingBody;
 
     if (!studio_id || !Array.isArray(slots) || slots.length === 0) {
       return res.status(400).json({ error: "studio_id and slots[] are required" });
@@ -118,18 +127,12 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
     const studio = await prisma.studios.findUnique({ where: { id: studio_id } });
     if (!studio) return res.status(404).json({ error: "Studio not found" });
 
-    // Validate slots
-    interface ValidatedSlot {
-      start: Date;
-      end: Date;
-      duration: number;
-    }
     const validatedSlots: ValidatedSlot[] = [];
     let totalAmount = 0;
 
-    for (const s of slots as SlotInput[]) {
-      const start = parseDate(s.start_time);
-      const end = parseDate(s.end_time);
+    for (const slot of slots) {
+      const start = parseDate(slot.start_time);
+      const end = parseDate(slot.end_time);
 
       if (!start || !end) return res.status(400).json({ error: "Invalid slot date" });
       if (start >= end) return res.status(400).json({ error: "Slot end must be after start" });
@@ -153,7 +156,6 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
       validatedSlots.push({ start, end, duration });
     }
 
-    // Create payment
     const payment = await prisma.payments.create({
       data: {
         provider: "MPESA",
@@ -163,7 +165,6 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
       },
     });
 
-    // Create booking
     const booking = await prisma.bookings.create({
       data: {
         artist_id,
@@ -180,7 +181,6 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
       include: { booking_slots: true },
     });
 
-    // Link payment to booking
     await prisma.payments.update({
       where: { id: payment.id },
       data: { booking_id: booking.id },
