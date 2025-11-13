@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/server.ts",
     "postinstall": "prisma generate",
-    "build": "tsc && npx --no-install prisma migrate deploy",
+    "build": "tsc && chmod +x ./node_modules/.bin/prisma && npx prisma migrate deploy",
     "start": "node dist/src/server.js",
     "seed:user": "tsx scripts/seed-user.ts"
   },
