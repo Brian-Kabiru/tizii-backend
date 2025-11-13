@@ -125,7 +125,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
     const validatedSlots: ValidatedSlot[] = [];
     let totalAmount = 0;
 
-    for (const s of slots) {
+    for (const s of slots as SlotInput[]) {
       const start = parseDate(s.start_time);
       const end = parseDate(s.end_time);
 
