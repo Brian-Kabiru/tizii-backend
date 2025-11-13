@@ -19,13 +19,18 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response) => {
 
     const where: WhereFilter = {};
 
-    if (req.user?.role === "artist") where.artist_id = req.user.id;
+    if (req.user?.role === "artist") {
+      where.artist_id = req.user.id;
+    }
+
     if (req.user?.role === "studio_manager") {
       const studios = await prisma.studios.findMany({
         where: { owner_id: req.user.id },
         select: { id: true },
       });
-      where.studio_id = { in: studios.map((s) => s.id) };
+
+      const studioIds: string[] = studios.map((s: { id: string }) => s.id);
+      where.studio_id = { in: studioIds };
     }
 
     const bookings = await prisma.bookings.findMany({
