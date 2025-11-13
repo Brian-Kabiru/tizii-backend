@@ -1,17 +1,22 @@
 // src/controllers/bookingController.ts
-import { Request, Response } from "express";
+import { Response } from "express";
 import prisma from "../prisma/client";
 import { AuthenticatedRequest } from "../middleware/authMiddleware";
 
-const parseDate = (d: any) => {
+// Helper to parse dates safely
+const parseDate = (d: string | Date): Date | null => {
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? null : dt;
 };
 
-// GET /bookings - role-based list
+// ---------------------- GET /bookings ----------------------
 export const getBookings = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const where: any = {};
+    type WhereFilter = {
+      artist_id?: string;
+      studio_id?: { in: string[] };
+    };
+    const where: WhereFilter = {};
 
     if (req.user?.role === "artist") where.artist_id = req.user.id;
     if (req.user?.role === "studio_manager") {
@@ -19,7 +24,7 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response) => {
         where: { owner_id: req.user.id },
         select: { id: true },
       });
-      where.studio_id = { in: studios.map(s => s.id) };
+      where.studio_id = { in: studios.map((s) => s.id) };
     }
 
     const bookings = await prisma.bookings.findMany({
@@ -50,7 +55,7 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
-// GET /bookings/:id
+// ---------------------- GET /bookings/:id ----------------------
 export const getBookingById = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -59,7 +64,15 @@ export const getBookingById = async (req: AuthenticatedRequest, res: Response) =
       where: { id },
       include: {
         users: true,
-        studios: { select: { id: true, owner_id: true, payment_type: true, paybill_number: true, till_number: true } },
+        studios: {
+          select: {
+            id: true,
+            owner_id: true,
+            payment_type: true,
+            paybill_number: true,
+            till_number: true,
+          },
+        },
         payments: true,
         booking_slots: true,
       },
@@ -67,28 +80,34 @@ export const getBookingById = async (req: AuthenticatedRequest, res: Response) =
 
     if (!booking) return res.status(404).json({ error: "Booking not found" });
 
-    if (
+    const hasAccess =
       req.user?.role === "admin" ||
       (req.user?.role === "artist" && booking.artist_id === req.user.id) ||
-      (req.user?.role === "studio_manager" && booking.studios?.owner_id === req.user.id)
-    ) {
-      return res.json(booking);
-    }
+      (req.user?.role === "studio_manager" && booking.studios?.owner_id === req.user.id);
 
-    res.status(403).json({ error: "Forbidden: You don't have access" });
+    if (!hasAccess) return res.status(403).json({ error: "Forbidden: You don't have access" });
+
+    res.json(booking);
   } catch (error) {
     console.error("Error fetching booking:", error);
     res.status(500).json({ error: "Failed to fetch booking" });
   }
 };
 
-// POST /bookings - multi-slot / multi-day booking
+// ---------------------- POST /bookings ----------------------
 export const createBooking = async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const artist_id: string = req.user.id;
 
-    const artist_id = req.user.id;
-    const { studio_id, slots, currency } = req.body;
+    // Types for request body
+    type SlotInput = { start_time: string | Date; end_time: string | Date };
+    interface CreateBookingBody {
+      studio_id: string;
+      slots: SlotInput[];
+      currency?: string;
+    }
+    const { studio_id, slots, currency }: CreateBookingBody = req.body;
 
     if (!studio_id || !Array.isArray(slots) || slots.length === 0) {
       return res.status(400).json({ error: "studio_id and slots[] are required" });
@@ -97,9 +116,15 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
     const studio = await prisma.studios.findUnique({ where: { id: studio_id } });
     if (!studio) return res.status(404).json({ error: "Studio not found" });
 
-    const validatedSlots: { start: Date; end: Date; duration: number }[] = [];
+    // Validate and process slots
+    interface ValidatedSlot {
+      start: Date;
+      end: Date;
+      duration: number;
+    }
+    const validatedSlots: ValidatedSlot[] = [];
     let totalAmount = 0;
-    type SlotInput = { start_time: string | Date; end_time: string | Date };
+
     for (const s of slots) {
       const start = parseDate(s.start_time);
       const end = parseDate(s.end_time);
@@ -113,10 +138,13 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
           AND: [{ start_time: { lt: end } }, { end_time: { gt: start } }],
         },
       });
-      if (overlapping) return res.status(409).json({
-        error: "Studio already booked for one or more selected slots",
-        conflict: { start_time: overlapping.start_time, end_time: overlapping.end_time },
-      });
+
+      if (overlapping) {
+        return res.status(409).json({
+          error: "Studio already booked for one or more selected slots",
+          conflict: { start_time: overlapping.start_time, end_time: overlapping.end_time },
+        });
+      }
 
       const duration = Math.round((+end - +start) / 60000);
       totalAmount += Number(studio.price_per_hour) * (duration / 60);
@@ -133,7 +161,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
       },
     });
 
-    // Create single booking with multiple slots
+    // Create booking
     const booking = await prisma.bookings.create({
       data: {
         artist_id,
@@ -145,9 +173,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
         currency: currency || "KES",
         status: "pending",
         payment_id: payment.id,
-        booking_slots: {
-          create: validatedSlots.map(s => ({ start_time: s.start, end_time: s.end })),
-        },
+        booking_slots: { create: validatedSlots.map((s) => ({ start_time: s.start, end_time: s.end })) },
       },
       include: { booking_slots: true },
     });
@@ -165,11 +191,11 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
   }
 };
 
-// PATCH /bookings/:id/status
+// ---------------------- PATCH /bookings/:id/status ----------------------
 export const updateBookingStatus = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status } = req.body as { status: "pending" | "confirmed" | "completed" | "cancelled" };
 
     if (!["pending", "confirmed", "completed", "cancelled"].includes(status)) {
       return res.status(400).json({ error: "Invalid status" });
@@ -198,7 +224,7 @@ export const updateBookingStatus = async (req: AuthenticatedRequest, res: Respon
   }
 };
 
-// DELETE /bookings/:id - admin only
+// ---------------------- DELETE /bookings/:id ----------------------
 export const deleteBooking = async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (req.user?.role !== "admin") return res.status(403).json({ error: "Forbidden" });
