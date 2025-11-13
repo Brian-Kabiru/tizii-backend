@@ -1,19 +1,22 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
+// src/routes/index.ts
+import { Router } from "express";
 import authRoutes from "./authRoutes";
+import studioRoutes from "./studioRoutes";
+import bookingRoutes from "./bookingRoutes";
+import paymentRoutes from "./paymentRoutes";
 
-dotenv.config();
-const app = express();
+const router = Router();
 
-app.use(cors());
-app.use(express.json());
+// Mount auth routes under /auth
+router.use("/auth", authRoutes);
 
-app.use("/auth", authRoutes);
+// Mount studio routes under /studios
+router.use("/studios", studioRoutes);
 
-app.get("/", (req, res) => {
-  res.send("Tizii API is running 🚀");
-});
+// Mount booking routes under /bookings
+router.use("/bookings", bookingRoutes);
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Mount payment routes under /payments
+router.use("/payments", paymentRoutes);
+
+export default router; // ✅ default export
