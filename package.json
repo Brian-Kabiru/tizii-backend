@@ -15,6 +15,15 @@
   "dependencies": {
     "@prisma/client": "^6.18.0",
     "prisma": "^6.18.0",
+    "typescript": "^5.9.3",
+    "@types/node": "^24.9.1",
+    "@types/express": "^5.0.3",
+    "@types/cors": "^2.8.19",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/bcrypt": "^6.0.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/axios": "^0.9.36",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
@@ -28,18 +37,8 @@
     "pg": "^8.16.3"
   },
   "devDependencies": {
-    "@types/axios": "^0.9.36",
-    "@types/bcrypt": "^6.0.0",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/cookie-parser": "^1.4.9",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.3",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^24.9.1",
-    "@types/pg": "^8.15.5",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "tsx": "^4.20.6"
   }
 }
