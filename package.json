@@ -6,6 +6,8 @@
     "dev": "nodemon --watch src --exec ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/src/server.js",
+    "migrate": "npx prisma migrate deploy",
+    "postinstall": "npm run migrate",
     "seed:user": "tsx scripts/seed-user.ts"
   },
   "keywords": [],
