@@ -3,7 +3,7 @@ import { Response } from "express";
 import prisma from "../prisma/client";
 import { AuthenticatedRequest } from "../middleware/authMiddleware";
 
-// Helper to parse dates safely
+// ---------------------- Helpers ----------------------
 const parseDate = (d: string | Date): Date | null => {
   const dt = new Date(d);
   return isNaN(dt.getTime()) ? null : dt;
@@ -16,6 +16,7 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response) => {
       artist_id?: string;
       studio_id?: { in: string[] };
     };
+
     const where: WhereFilter = {};
 
     if (req.user?.role === "artist") where.artist_id = req.user.id;
@@ -98,9 +99,10 @@ export const getBookingById = async (req: AuthenticatedRequest, res: Response) =
 export const createBooking = async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+
     const artist_id: string = req.user.id;
 
-    // Types for request body
+    // Request body types
     type SlotInput = { start_time: string | Date; end_time: string | Date };
     interface CreateBookingBody {
       studio_id: string;
@@ -116,7 +118,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
     const studio = await prisma.studios.findUnique({ where: { id: studio_id } });
     if (!studio) return res.status(404).json({ error: "Studio not found" });
 
-    // Validate and process slots
+    // Validate slots
     interface ValidatedSlot {
       start: Date;
       end: Date;
