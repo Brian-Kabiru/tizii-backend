@@ -25,7 +25,7 @@ const upload = multer();
 const router = Router();
 
 /* -----------------------------------------------------
- *                   PUBLIC ROUTES
+ *                   PUBLIC ROUTES FOR STUDIOS
  * --------------------------------------------------- */
 
 router.get("/", listStudios);
