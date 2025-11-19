@@ -129,7 +129,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
         const overlapping = await prisma.bookings.findFirst({
           where: {
             room_id,
-            OR: [{ start_time: { lte: s.end } }, { end_time: { gte: s.start } }],
+            AND: [{ start_time: { lt: s.end } }, { end_time: { gt: s.start } }],
             status: { in: ["pending", "confirmed"] },
           },
         });

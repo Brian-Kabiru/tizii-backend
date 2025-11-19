@@ -1,3 +1,4 @@
+// src/controllers/studioController.ts
 import { Request, Response } from "express";
 import prisma from "../prisma/client";
 import { Prisma } from "@prisma/client";
@@ -11,10 +12,12 @@ import {
 } from "../types/studio";
 import { uploadToCloudinary } from "../utils/cloudinary";
 
-/* ------------------ Studios ------------------ */
+/* -----------------------------------------------------
+ *                     STUDIOS
+ * --------------------------------------------------- */
 
 /**
- * Create a studio with optional multiple photo uploads
+ * Create a new studio (with optional photos)
  */
 export const createStudio = async (req: Request, res: Response) => {
   const authReq = req as AuthenticatedRequest;
@@ -25,19 +28,17 @@ export const createStudio = async (req: Request, res: Response) => {
   const files = req.files as Express.Multer.File[] | undefined;
 
   try {
-    // Determine owner_id
     const ownerId =
       authReq.user.role === "admin" && input.owner_id
         ? input.owner_id
         : authReq.user.id;
 
-    // Create studio
     const studio = await prisma.studios.create({
       data: {
         owner_id: ownerId,
         name: input.name,
-        description: input.description ?? null,
-        location: input.location ?? null,
+        description: input.description || null,
+        location: input.location || null,
         timezone: input.timezone ?? "Africa/Nairobi",
         amenities: input.amenities ?? [],
         tizii_paybill: input.tizii_paybill ?? null,
@@ -49,28 +50,28 @@ export const createStudio = async (req: Request, res: Response) => {
       },
     });
 
-    // Upload photos if provided
+    /* Upload photos */
     if (files?.length) {
-      const uploadPromises = files.map(async (file) => {
-        const uploadedUrl = await uploadToCloudinary(file.buffer); // single arg
-        return prisma.studio_photos.create({
-          data: {
-            studio_id: studio.id,
-            url: uploadedUrl, // direct string
-            alt_text: file.originalname,
-          },
-        });
-      });
-      await Promise.all(uploadPromises);
+      await Promise.all(
+        files.map(async (file) => {
+          const url = await uploadToCloudinary(file.buffer);
+          await prisma.studio_photos.create({
+            data: {
+              studio_id: studio.id,
+              url,
+              alt_text: file.originalname,
+            },
+          });
+        })
+      );
     }
 
-    // Return studio with gallery
-    const studioWithPhotos = await prisma.studios.findUnique({
+    const fullStudio = await prisma.studios.findUnique({
       where: { id: studio.id },
       include: { gallery: true },
     });
 
-    res.status(201).json({ studio: studioWithPhotos });
+    res.status(201).json({ studio: fullStudio });
   } catch (err) {
     console.error("createStudio error", err);
     res.status(500).json({ message: "Failed to create studio" });
@@ -78,7 +79,7 @@ export const createStudio = async (req: Request, res: Response) => {
 };
 
 /**
- * List all studios
+ * Return all studios with rooms, owner, gallery
  */
 export const listStudios = async (req: Request, res: Response) => {
   try {
@@ -89,6 +90,7 @@ export const listStudios = async (req: Request, res: Response) => {
         gallery: true,
       },
     });
+
     res.json({ studios });
   } catch (err) {
     console.error("listStudios error", err);
@@ -97,10 +99,11 @@ export const listStudios = async (req: Request, res: Response) => {
 };
 
 /**
- * Get a single studio by id
+ * Get a single studio with rooms, availability, staff, gallery
  */
 export const getStudio = async (req: Request, res: Response) => {
   const id = req.params.id;
+
   try {
     const studio = await prisma.studios.findUnique({
       where: { id },
@@ -109,7 +112,9 @@ export const getStudio = async (req: Request, res: Response) => {
         availability: true,
         availability_exceptions: true,
         staff: {
-          include: { user: { select: { id: true, full_name: true, email: true } } },
+          include: {
+            user: { select: { id: true, full_name: true, email: true } },
+          },
         },
         gallery: true,
       },
@@ -125,19 +130,19 @@ export const getStudio = async (req: Request, res: Response) => {
 };
 
 /**
- * Update studio info + optionally upload new photos
+ * Update a studio + optionally upload photos
  */
 export const updateStudio = async (req: Request, res: Response) => {
   const authReq = req as AuthenticatedRequest;
+  if (!authReq.user)
+    return res.status(401).json({ message: "Unauthorized" });
+
   const id = req.params.id;
   const input = req.body as UpdateStudioInput;
   const files = req.files as Express.Multer.File[] | undefined;
 
-  if (!authReq.user)
-    return res.status(401).json({ message: "Unauthorized" });
-
   try {
-    const updated = await prisma.studios.update({
+    await prisma.studios.update({
       where: { id },
       data: {
         name: input.name ?? undefined,
@@ -154,27 +159,28 @@ export const updateStudio = async (req: Request, res: Response) => {
       },
     });
 
-    // Upload new photos if provided
+    /* Handle new photo uploads */
     if (files?.length) {
-      const uploadPromises = files.map(async (file) => {
-        const uploadedUrl = await uploadToCloudinary(file.buffer);
-        return prisma.studio_photos.create({
-          data: {
-            studio_id: updated.id,
-            url: uploadedUrl,
-            alt_text: file.originalname,
-          },
-        });
-      });
-      await Promise.all(uploadPromises);
+      await Promise.all(
+        files.map(async (file) => {
+          const url = await uploadToCloudinary(file.buffer);
+          await prisma.studio_photos.create({
+            data: {
+              studio_id: id,
+              url,
+              alt_text: file.originalname,
+            },
+          });
+        })
+      );
     }
 
-    const studioWithPhotos = await prisma.studios.findUnique({
+    const updatedStudio = await prisma.studios.findUnique({
       where: { id },
       include: { gallery: true },
     });
 
-    res.json({ studio: studioWithPhotos });
+    res.json({ studio: updatedStudio });
   } catch (err) {
     console.error("updateStudio error", err);
     res.status(500).json({ message: "Server error" });
@@ -186,6 +192,7 @@ export const updateStudio = async (req: Request, res: Response) => {
  */
 export const deleteStudio = async (req: Request, res: Response) => {
   const id = req.params.id;
+
   try {
     await prisma.studios.delete({ where: { id } });
     res.json({ message: "Studio deleted" });
@@ -195,11 +202,14 @@ export const deleteStudio = async (req: Request, res: Response) => {
   }
 };
 
-/* ------------------ Rooms ------------------ */
+/* -----------------------------------------------------
+ *                     ROOMS
+ * --------------------------------------------------- */
 
 export const createRoom = async (req: Request, res: Response) => {
   const authReq = req as AuthenticatedRequest;
-  if (!authReq.user) return res.status(401).json({ message: "Unauthorized" });
+  if (!authReq.user)
+    return res.status(401).json({ message: "Unauthorized" });
 
   const studioId = req.params.studioId;
   const input = req.body as CreateRoomInput;
@@ -211,10 +221,7 @@ export const createRoom = async (req: Request, res: Response) => {
         name: input.name,
         description: input.description ?? null,
         type: input.type ?? null,
-        hourly_rate:
-          typeof input.hourly_rate === "string"
-            ? input.hourly_rate
-            : String(input.hourly_rate),
+        hourly_rate: String(input.hourly_rate),
         overnight_rate: input.overnight_rate
           ? String(input.overnight_rate)
           : null,
@@ -222,6 +229,7 @@ export const createRoom = async (req: Request, res: Response) => {
         equipment: input.equipment ?? [],
       },
     });
+
     res.status(201).json({ room });
   } catch (err) {
     console.error("createRoom error", err);
@@ -232,7 +240,10 @@ export const createRoom = async (req: Request, res: Response) => {
 export const listRooms = async (req: Request, res: Response) => {
   const studioId = req.params.studioId;
   try {
-    const rooms = await prisma.rooms.findMany({ where: { studio_id: studioId } });
+    const rooms = await prisma.rooms.findMany({
+      where: { studio_id: studioId },
+    });
+
     res.json({ rooms });
   } catch (err) {
     console.error("listRooms error", err);
@@ -242,9 +253,12 @@ export const listRooms = async (req: Request, res: Response) => {
 
 export const getRoom = async (req: Request, res: Response) => {
   const id = req.params.roomId;
+
   try {
     const room = await prisma.rooms.findUnique({ where: { id } });
+
     if (!room) return res.status(404).json({ message: "Room not found" });
+
     res.json({ room });
   } catch (err) {
     console.error("getRoom error", err);
@@ -263,7 +277,9 @@ export const updateRoom = async (req: Request, res: Response) => {
         name: input.name ?? undefined,
         description: input.description ?? undefined,
         type: input.type ?? undefined,
-        hourly_rate: input.hourly_rate ? String(input.hourly_rate) : undefined,
+        hourly_rate: input.hourly_rate
+          ? String(input.hourly_rate)
+          : undefined,
         overnight_rate:
           input.overnight_rate !== undefined
             ? input.overnight_rate === null
@@ -274,6 +290,7 @@ export const updateRoom = async (req: Request, res: Response) => {
         equipment: input.equipment ?? undefined,
       },
     });
+
     res.json({ room: updated });
   } catch (err) {
     console.error("updateRoom error", err);
@@ -283,6 +300,7 @@ export const updateRoom = async (req: Request, res: Response) => {
 
 export const deleteRoom = async (req: Request, res: Response) => {
   const id = req.params.roomId;
+
   try {
     await prisma.rooms.delete({ where: { id } });
     res.json({ message: "Room deleted" });
@@ -292,17 +310,20 @@ export const deleteRoom = async (req: Request, res: Response) => {
   }
 };
 
-/* ------------------ Availability ------------------ */
+/* -----------------------------------------------------
+ *                AVAILABILITY
+ * --------------------------------------------------- */
 
 export const addStudioAvailability = async (req: Request, res: Response) => {
   const authReq = req as AuthenticatedRequest;
-  if (!authReq.user) return res.status(401).json({ message: "Unauthorized" });
+  if (!authReq.user)
+    return res.status(401).json({ message: "Unauthorized" });
 
   const studioId = req.params.studioId;
   const input = req.body as AvailabilityInput;
 
   try {
-    const avail = await prisma.studio_availability.create({
+    const availability = await prisma.studio_availability.create({
       data: {
         studio_id: studioId,
         day_of_week: input.day_of_week,
@@ -310,7 +331,8 @@ export const addStudioAvailability = async (req: Request, res: Response) => {
         close_time: input.close_time,
       },
     });
-    res.status(201).json({ availability: avail });
+
+    res.status(201).json({ availability });
   } catch (err) {
     console.error("addStudioAvailability error", err);
     res.status(500).json({ message: "Server error" });
@@ -319,13 +341,14 @@ export const addStudioAvailability = async (req: Request, res: Response) => {
 
 export const addRoomAvailability = async (req: Request, res: Response) => {
   const authReq = req as AuthenticatedRequest;
-  if (!authReq.user) return res.status(401).json({ message: "Unauthorized" });
+  if (!authReq.user)
+    return res.status(401).json({ message: "Unauthorized" });
 
   const roomId = req.params.roomId;
   const input = req.body as AvailabilityInput;
 
   try {
-    const avail = await prisma.room_availability.create({
+    const availability = await prisma.room_availability.create({
       data: {
         room_id: roomId,
         day_of_week: input.day_of_week,
@@ -333,7 +356,8 @@ export const addRoomAvailability = async (req: Request, res: Response) => {
         close_time: input.close_time,
       },
     });
-    res.status(201).json({ availability: avail });
+
+    res.status(201).json({ availability });
   } catch (err) {
     console.error("addRoomAvailability error", err);
     res.status(500).json({ message: "Server error" });

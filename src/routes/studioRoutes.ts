@@ -1,4 +1,7 @@
+// src/routes/studioRoutes.ts
 import { Router } from "express";
+import multer from "multer";
+
 import {
   createStudio,
   listStudios,
@@ -13,49 +16,107 @@ import {
   addStudioAvailability,
   addRoomAvailability,
 } from "../controllers/studioController";
+
 import { authMiddleware } from "../middleware/authMiddleware";
 import { authorize } from "../middleware/authorize";
 import { requireStudioRole } from "../middleware/requireStudioRole";
-import { PlatformRole } from "../types/auth";
-import multer from "multer";
-const upload = multer();
 
+const upload = multer();
 const router = Router();
 
-// public
+/* -----------------------------------------------------
+ *                   PUBLIC ROUTES
+ * --------------------------------------------------- */
+
 router.get("/", listStudios);
 router.get("/:id", getStudio);
 
-// create studio
+/* -----------------------------------------------------
+ *                  STUDIO CRUD
+ * --------------------------------------------------- */
+
+// Create studio (Admin or Studio Owner)
 router.post(
   "/",
   authMiddleware,
   authorize(["admin", "studio_owner"]),
-  upload.array("photos"), // for multiple photo uploads
+  upload.array("photos"),
   createStudio
 );
 
-// update/delete (owner or admin) - protect with requireStudioRole or authorize+custom check
-router.patch("/:id", authMiddleware, requireStudioRole("id", ["studio_owner"]), updateStudio);
-router.delete("/:id", authMiddleware, requireStudioRole("id", ["studio_owner"]), deleteStudio);
+// Update studio (Only the studio owner)
+router.patch(
+  "/:id",
+  authMiddleware,
+  requireStudioRole("id", ["studio_owner"]),
+  upload.array("photos"),
+  updateStudio
+);
 
-// Rooms (studio scoped)
+// Delete studio (Only the studio owner)
+router.delete(
+  "/:id",
+  authMiddleware,
+  requireStudioRole("id", ["studio_owner"]),
+  deleteStudio
+);
+
+/* -----------------------------------------------------
+ *                   ROOMS (SCOPED TO STUDIO)
+ * --------------------------------------------------- */
+
+// List rooms for a studio
 router.get("/:studioId/rooms", listRooms);
+
+// Create a room (studio manager, staff, or owner)
 router.post(
   "/:studioId/rooms",
   authMiddleware,
-  // require the user to be owner/manager/staff on the studio
-  requireStudioRole("studioId", ["studio_manager", "studio_staff"]),
+  requireStudioRole("studioId", ["studio_owner", "studio_manager", "studio_staff"]),
   createRoom
 );
 
-// Room operations
-router.get("/rooms/:roomId", getRoom);
-router.patch("/rooms/:roomId", authMiddleware, requireStudioRole("studioId", ["studio_manager", "studio_staff"]), updateRoom);
-router.delete("/rooms/:roomId", authMiddleware, requireStudioRole("studioId", ["studio_manager", "studio_staff"]), deleteRoom);
+/* -----------------------------------------------------
+ *                     ROOM CRUD
+ * --------------------------------------------------- */
 
-// Availability
-router.post("/:studioId/availability", authMiddleware, requireStudioRole("studioId", ["studio_manager", "studio_staff"]), addStudioAvailability);
-router.post("/rooms/:roomId/availability", authMiddleware, requireStudioRole("studioId", ["studio_manager", "studio_staff"]), addRoomAvailability);
+// Get a room
+router.get("/rooms/:roomId", getRoom);
+
+// Update a room
+router.patch(
+  "/rooms/:roomId",
+  authMiddleware,
+  requireStudioRole("roomId", ["studio_owner", "studio_manager", "studio_staff"]),
+  updateRoom
+);
+
+// Delete a room
+router.delete(
+  "/rooms/:roomId",
+  authMiddleware,
+  requireStudioRole("roomId", ["studio_owner", "studio_manager", "studio_staff"]),
+  deleteRoom
+);
+
+/* -----------------------------------------------------
+ *                  AVAILABILITY
+ * --------------------------------------------------- */
+
+// Set studio availability
+router.post(
+  "/:studioId/availability",
+  authMiddleware,
+  requireStudioRole("studioId", ["studio_owner", "studio_manager", "studio_staff"]),
+  addStudioAvailability
+);
+
+// Set room availability
+router.post(
+  "/rooms/:roomId/availability",
+  authMiddleware,
+  requireStudioRole("roomId", ["studio_owner", "studio_manager", "studio_staff"]),
+  addRoomAvailability
+);
 
 export default router;
