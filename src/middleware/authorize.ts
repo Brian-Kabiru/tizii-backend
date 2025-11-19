@@ -1,16 +1,14 @@
-// src/middleware/authorize.ts
-import { Response, NextFunction, RequestHandler } from "express";
-import { AuthenticatedRequest } from "./authMiddleware";
+import { Request, Response, NextFunction } from "express";
+import { AuthenticatedRequest, PlatformRole } from "../types/auth";
 
-// Middleware to check roles
-export const authorize =
-  (...allowedRoles: Array<"artist" | "studio_manager" | "admin">): RequestHandler =>
-  ((req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+export const authorize = (roles: PlatformRole[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const authReq = req as AuthenticatedRequest;
+    if (!authReq.user) return res.status(401).json({ message: "Unauthorized" });
 
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ error: "Forbidden: Access denied" });
-    }
+    if (!roles.includes(authReq.user.role))
+      return res.status(403).json({ message: "Forbidden" });
 
     next();
-  }) as RequestHandler;
+  };
+};

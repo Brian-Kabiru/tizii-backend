@@ -1,72 +1,36 @@
 // src/routes/bookingRoutes.ts
-import express, { Request, Response } from "express";
+import express, { RequestHandler } from "express";
 import {
   getBookings,
   getBookingById,
   createBooking,
+  updateBooking,
   updateBookingStatus,
   deleteBooking,
 } from "../controllers/bookingController";
-import { initiatePayment } from "../controllers/paymentController";
 import { authMiddleware } from "../middleware/authMiddleware";
-import { authorize } from "../middleware/authorize";
-import { AuthenticatedRequest } from "../middleware/authMiddleware";
 
 const router = express.Router();
 
-/**
- * Helper to wrap handlers using AuthenticatedRequest
- */
-const authHandler = (
-  handler: (req: AuthenticatedRequest, res: Response) => any
-) => (req: Request, res: Response) => handler(req as AuthenticatedRequest, res);
+// All routes require authentication
+router.use(authMiddleware);
 
-// GET /bookings - role-based list
-router.get(
-  "/",
-  authMiddleware,
-  authorize("artist", "studio_manager", "admin"),
-  authHandler(getBookings)
-);
+// GET all bookings (artist / studio manager / admin)
+router.get("/", getBookings as RequestHandler);
 
-// GET /bookings/:id - single booking
-router.get(
-  "/:id",
-  authMiddleware,
-  authorize("artist", "studio_manager", "admin"),
-  authHandler(getBookingById)
-);
+// GET a single booking by ID
+router.get("/:id", getBookingById as RequestHandler);
 
-// POST /bookings - create multi-slot/multi-day booking (artists only)
-router.post(
-  "/",
-  authMiddleware,
-  authorize("artist"),
-  authHandler(createBooking)
-);
+// POST a new booking
+router.post("/", createBooking as RequestHandler);
 
-// POST /bookings/pay - trigger MPESA STK push for a booking
-router.post(
-  "/pay",
-  authMiddleware,
-  authorize("artist", "admin"),
-  authHandler(initiatePayment)
-);
+// PATCH booking general fields (e.g., notes, duration)
+router.patch("/:id", updateBooking as RequestHandler);
 
-// PATCH /bookings/:id/status - update booking status
-router.patch(
-  "/:id/status",
-  authMiddleware,
-  authorize("studio_manager", "admin"),
-  authHandler(updateBookingStatus)
-);
+// PATCH booking status only
+router.patch("/:id/status", updateBookingStatus as RequestHandler);
 
-// DELETE /bookings/:id - admin only
-router.delete(
-  "/:id",
-  authMiddleware,
-  authorize("admin"),
-  authHandler(deleteBooking)
-);
+// DELETE booking (admin only)
+router.delete("/:id", deleteBooking as RequestHandler);
 
 export default router;
