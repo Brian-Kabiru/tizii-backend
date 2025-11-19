@@ -1,210 +1,341 @@
-// src/controllers/studiosController.ts
 import { Request, Response } from "express";
 import prisma from "../prisma/client";
-import { AuthenticatedRequest } from "../middleware/authMiddleware";
+import { Prisma } from "@prisma/client";
+import { AuthenticatedRequest } from "../types/auth";
+import {
+  CreateStudioInput,
+  UpdateStudioInput,
+  CreateRoomInput,
+  UpdateRoomInput,
+  AvailabilityInput,
+} from "../types/studio";
+import { uploadToCloudinary } from "../utils/cloudinary";
+
+/* ------------------ Studios ------------------ */
 
 /**
- * 🟢 Get all studios (Public)
+ * Create a studio with optional multiple photo uploads
  */
-export const getStudios = async (req: Request, res: Response) => {
+export const createStudio = async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  if (!authReq.user)
+    return res.status(401).json({ message: "Unauthorized" });
+
+  const input = req.body as CreateStudioInput;
+  const files = req.files as Express.Multer.File[] | undefined;
+
   try {
-    const studios = await prisma.studios.findMany({
-      include: { users: { select: { id: true, full_name: true, email: true } } },
-    });
-    res.json(studios);
-  } catch (error) {
-    console.error("Error fetching studios:", error);
-    res.status(500).json({ error: "Failed to fetch studios" });
-  }
-};
-
-/**
- * 🧾 Get a single studio by ID (Public)
- */
-export const getStudioById = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const studio = await prisma.studios.findUnique({
-      where: { id },
-      include: { users: { select: { id: true, full_name: true, email: true } } },
-    });
-    if (!studio) return res.status(404).json({ error: "Studio not found" });
-    res.json(studio);
-  } catch (error) {
-    console.error("Error fetching studio:", error);
-    res.status(500).json({ error: "Failed to fetch studio" });
-  }
-};
-
-/**
- * 🏗️ Create a new studio (Studio Manager or Admin)
- */
-export const createStudio = async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
-    if (!["studio_manager", "admin"].includes(req.user.role)) {
-      return res.status(403).json({ error: "Forbidden: Access denied" });
-    }
-
-    const {
-      name,
-      description,
-      location,
-      capacity,
-      price_per_hour,
-      amenities,
-      payment_type,
-      paybill_number,
-      till_number,
-    } = req.body;
-
+    // Determine owner_id
     const ownerId =
-      req.user.role === "admin" && req.body.owner_id ? req.body.owner_id : req.user.id;
+      authReq.user.role === "admin" && input.owner_id
+        ? input.owner_id
+        : authReq.user.id;
 
+    // Create studio
     const studio = await prisma.studios.create({
       data: {
-        name,
-        description,
-        location,
-        capacity,
-        price_per_hour,
-        amenities,
         owner_id: ownerId,
-        payment_type: payment_type ?? "till",
-        paybill_number: paybill_number ?? null,
-        till_number: till_number ?? null,
+        name: input.name,
+        description: input.description ?? null,
+        location: input.location ?? null,
+        timezone: input.timezone ?? "Africa/Nairobi",
+        amenities: input.amenities ?? [],
+        tizii_paybill: input.tizii_paybill ?? null,
+        studio_paybill: input.studio_paybill ?? null,
+        till_number: input.till_number ?? null,
+        payment_type: input.payment_type ?? "tizii_paybill",
+        payout_schedule: input.payout_schedule ?? "monthly",
+        payout_account: input.payout_account ?? Prisma.JsonNull,
       },
     });
 
-    res.status(201).json(studio);
-  } catch (error) {
-    console.error("Error creating studio:", error);
-    res.status(500).json({ error: "Failed to create studio" });
+    // Upload photos if provided
+    if (files?.length) {
+      const uploadPromises = files.map(async (file) => {
+        const uploadedUrl = await uploadToCloudinary(file.buffer); // single arg
+        return prisma.studio_photos.create({
+          data: {
+            studio_id: studio.id,
+            url: uploadedUrl, // direct string
+            alt_text: file.originalname,
+          },
+        });
+      });
+      await Promise.all(uploadPromises);
+    }
+
+    // Return studio with gallery
+    const studioWithPhotos = await prisma.studios.findUnique({
+      where: { id: studio.id },
+      include: { gallery: true },
+    });
+
+    res.status(201).json({ studio: studioWithPhotos });
+  } catch (err) {
+    console.error("createStudio error", err);
+    res.status(500).json({ message: "Failed to create studio" });
   }
 };
 
 /**
- * ✏️ Update a studio (Owner or Admin)
+ * List all studios
  */
-export const updateStudio = async (req: AuthenticatedRequest, res: Response) => {
+export const listStudios = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const studios = await prisma.studios.findMany({
+      include: {
+        rooms: true,
+        owner: { select: { id: true, full_name: true, email: true } },
+        gallery: true,
+      },
+    });
+    res.json({ studios });
+  } catch (err) {
+    console.error("listStudios error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
-    const studio = await prisma.studios.findUnique({ where: { id } });
-    if (!studio) return res.status(404).json({ error: "Studio not found" });
-    if (req.user.role !== "admin" && studio.owner_id !== req.user.id) {
-      return res.status(403).json({ error: "Forbidden: Not your studio" });
-    }
+/**
+ * Get a single studio by id
+ */
+export const getStudio = async (req: Request, res: Response) => {
+  const id = req.params.id;
+  try {
+    const studio = await prisma.studios.findUnique({
+      where: { id },
+      include: {
+        rooms: true,
+        availability: true,
+        availability_exceptions: true,
+        staff: {
+          include: { user: { select: { id: true, full_name: true, email: true } } },
+        },
+        gallery: true,
+      },
+    });
 
-    const {
-      name,
-      description,
-      location,
-      capacity,
-      price_per_hour,
-      amenities,
-      payment_type,
-      paybill_number,
-      till_number,
-    } = req.body;
+    if (!studio) return res.status(404).json({ message: "Studio not found" });
 
-    const updatedStudio = await prisma.studios.update({
+    res.json({ studio });
+  } catch (err) {
+    console.error("getStudio error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * Update studio info + optionally upload new photos
+ */
+export const updateStudio = async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const id = req.params.id;
+  const input = req.body as UpdateStudioInput;
+  const files = req.files as Express.Multer.File[] | undefined;
+
+  if (!authReq.user)
+    return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const updated = await prisma.studios.update({
       where: { id },
       data: {
-        name,
-        description,
-        location,
-        capacity,
-        price_per_hour,
-        amenities,
-        payment_type,
-        paybill_number,
-        till_number,
+        name: input.name ?? undefined,
+        description: input.description ?? undefined,
+        location: input.location ?? undefined,
+        timezone: input.timezone ?? undefined,
+        amenities: input.amenities ?? undefined,
+        tizii_paybill: input.tizii_paybill ?? undefined,
+        studio_paybill: input.studio_paybill ?? undefined,
+        till_number: input.till_number ?? undefined,
+        payment_type: input.payment_type ?? undefined,
+        payout_schedule: input.payout_schedule ?? undefined,
+        payout_account: input.payout_account ?? undefined,
       },
     });
 
-    res.json(updatedStudio);
-  } catch (error) {
-    console.error("Error updating studio:", error);
-    res.status(500).json({ error: "Failed to update studio" });
-  }
-};
-
-/**
- * ❌ Delete a studio (Owner or Admin)
- */
-export const deleteStudio = async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
-
-    const studio = await prisma.studios.findUnique({ where: { id } });
-    if (!studio) return res.status(404).json({ error: "Studio not found" });
-    if (req.user.role !== "admin" && studio.owner_id !== req.user.id) {
-      return res.status(403).json({ error: "Forbidden: Not your studio" });
-    }
-
-    await prisma.studios.delete({ where: { id } });
-    res.json({ message: "Studio deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting studio:", error);
-    res.status(500).json({ error: "Failed to delete studio" });
-  }
-};
-
-/**
- * 🧑‍💼 Create a Studio Manager (Admin only)
- */
-export const createStudioManager = async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
-    if (req.user.role !== "admin") return res.status(403).json({ error: "Only admins can create studio managers" });
-
-    const { full_name, email, phone, password, studio_id } = req.body;
-    if (!email || !password || !full_name) {
-      return res.status(400).json({ error: "Full name, email, and password are required" });
-    }
-
-    const existingUser = await prisma.users.findUnique({ where: { email } });
-    if (existingUser) return res.status(409).json({ error: "Email already exists" });
-
-    if (studio_id) {
-      const studio = await prisma.studios.findUnique({ where: { id: studio_id } });
-      if (!studio) return res.status(404).json({ error: "Studio not found" });
-    }
-
-    const bcrypt = await import("bcryptjs");
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newManager = await prisma.users.create({
-      data: {
-        full_name,
-        email,
-        phone,
-        password_hash: hashedPassword,
-        role: "studio_manager",
-      },
-      select: {
-        id: true,
-        full_name: true,
-        email: true,
-        phone: true,
-        role: true,
-        created_at: true,
-      },
-    });
-
-    if (studio_id) {
-      await prisma.studios.update({
-        where: { id: studio_id },
-        data: { owner_id: newManager.id },
+    // Upload new photos if provided
+    if (files?.length) {
+      const uploadPromises = files.map(async (file) => {
+        const uploadedUrl = await uploadToCloudinary(file.buffer);
+        return prisma.studio_photos.create({
+          data: {
+            studio_id: updated.id,
+            url: uploadedUrl,
+            alt_text: file.originalname,
+          },
+        });
       });
+      await Promise.all(uploadPromises);
     }
 
-    res.status(201).json({ message: "Studio manager created successfully", user: newManager });
-  } catch (error) {
-    console.error("Error creating studio manager:", error);
-    res.status(500).json({ error: "Failed to create studio manager" });
+    const studioWithPhotos = await prisma.studios.findUnique({
+      where: { id },
+      include: { gallery: true },
+    });
+
+    res.json({ studio: studioWithPhotos });
+  } catch (err) {
+    console.error("updateStudio error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * Delete a studio
+ */
+export const deleteStudio = async (req: Request, res: Response) => {
+  const id = req.params.id;
+  try {
+    await prisma.studios.delete({ where: { id } });
+    res.json({ message: "Studio deleted" });
+  } catch (err) {
+    console.error("deleteStudio error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* ------------------ Rooms ------------------ */
+
+export const createRoom = async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  if (!authReq.user) return res.status(401).json({ message: "Unauthorized" });
+
+  const studioId = req.params.studioId;
+  const input = req.body as CreateRoomInput;
+
+  try {
+    const room = await prisma.rooms.create({
+      data: {
+        studio_id: studioId,
+        name: input.name,
+        description: input.description ?? null,
+        type: input.type ?? null,
+        hourly_rate:
+          typeof input.hourly_rate === "string"
+            ? input.hourly_rate
+            : String(input.hourly_rate),
+        overnight_rate: input.overnight_rate
+          ? String(input.overnight_rate)
+          : null,
+        visible: input.visible ?? true,
+        equipment: input.equipment ?? [],
+      },
+    });
+    res.status(201).json({ room });
+  } catch (err) {
+    console.error("createRoom error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const listRooms = async (req: Request, res: Response) => {
+  const studioId = req.params.studioId;
+  try {
+    const rooms = await prisma.rooms.findMany({ where: { studio_id: studioId } });
+    res.json({ rooms });
+  } catch (err) {
+    console.error("listRooms error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getRoom = async (req: Request, res: Response) => {
+  const id = req.params.roomId;
+  try {
+    const room = await prisma.rooms.findUnique({ where: { id } });
+    if (!room) return res.status(404).json({ message: "Room not found" });
+    res.json({ room });
+  } catch (err) {
+    console.error("getRoom error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const updateRoom = async (req: Request, res: Response) => {
+  const id = req.params.roomId;
+  const input = req.body as UpdateRoomInput;
+
+  try {
+    const updated = await prisma.rooms.update({
+      where: { id },
+      data: {
+        name: input.name ?? undefined,
+        description: input.description ?? undefined,
+        type: input.type ?? undefined,
+        hourly_rate: input.hourly_rate ? String(input.hourly_rate) : undefined,
+        overnight_rate:
+          input.overnight_rate !== undefined
+            ? input.overnight_rate === null
+              ? null
+              : String(input.overnight_rate)
+            : undefined,
+        visible: input.visible ?? undefined,
+        equipment: input.equipment ?? undefined,
+      },
+    });
+    res.json({ room: updated });
+  } catch (err) {
+    console.error("updateRoom error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const deleteRoom = async (req: Request, res: Response) => {
+  const id = req.params.roomId;
+  try {
+    await prisma.rooms.delete({ where: { id } });
+    res.json({ message: "Room deleted" });
+  } catch (err) {
+    console.error("deleteRoom error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* ------------------ Availability ------------------ */
+
+export const addStudioAvailability = async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  if (!authReq.user) return res.status(401).json({ message: "Unauthorized" });
+
+  const studioId = req.params.studioId;
+  const input = req.body as AvailabilityInput;
+
+  try {
+    const avail = await prisma.studio_availability.create({
+      data: {
+        studio_id: studioId,
+        day_of_week: input.day_of_week,
+        open_time: input.open_time,
+        close_time: input.close_time,
+      },
+    });
+    res.status(201).json({ availability: avail });
+  } catch (err) {
+    console.error("addStudioAvailability error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const addRoomAvailability = async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  if (!authReq.user) return res.status(401).json({ message: "Unauthorized" });
+
+  const roomId = req.params.roomId;
+  const input = req.body as AvailabilityInput;
+
+  try {
+    const avail = await prisma.room_availability.create({
+      data: {
+        room_id: roomId,
+        day_of_week: input.day_of_week,
+        open_time: input.open_time,
+        close_time: input.close_time,
+      },
+    });
+    res.status(201).json({ availability: avail });
+  } catch (err) {
+    console.error("addRoomAvailability error", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

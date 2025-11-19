@@ -1,51 +1,61 @@
-import express from "express";
+import { Router } from "express";
 import {
-  getStudios,
   createStudio,
-  getStudioById,
-  deleteStudio,
+  listStudios,
+  getStudio,
   updateStudio,
-  createStudioManager, // <-- added
+  deleteStudio,
+  createRoom,
+  listRooms,
+  getRoom,
+  updateRoom,
+  deleteRoom,
+  addStudioAvailability,
+  addRoomAvailability,
 } from "../controllers/studioController";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { authorize } from "../middleware/authorize";
-import type { RequestHandler } from "express";
+import { requireStudioRole } from "../middleware/requireStudioRole";
+import { PlatformRole } from "../types/auth";
+import multer from "multer";
+const upload = multer();
 
-const router = express.Router();
+const router = Router();
 
-// Public routes
-router.get("/", getStudios as unknown as RequestHandler);
-router.get("/:id", getStudioById as unknown as RequestHandler);
+// public
+router.get("/", listStudios);
+router.get("/:id", getStudio);
 
-// Admin-only route: create a new studio manager
-// POST /api/studios/managers
-router.post(
-  "/managers",
-  authMiddleware,
-  authorize("admin"),
-  createStudioManager as unknown as RequestHandler
-);
-
-// Protected routes (RBAC) for studios
+// create studio
 router.post(
   "/",
   authMiddleware,
-  authorize("studio_manager", "admin"),
-  createStudio as unknown as RequestHandler
+  authorize(["admin", "studio_owner"]),
+  upload.array("photos"), // for multiple photo uploads
+  createStudio
 );
 
-router.put(
-  "/:id",
+// update/delete (owner or admin) - protect with requireStudioRole or authorize+custom check
+router.patch("/:id", authMiddleware, requireStudioRole("id", ["studio_owner"]), updateStudio);
+router.delete("/:id", authMiddleware, requireStudioRole("id", ["studio_owner"]), deleteStudio);
+
+// Rooms (studio scoped)
+router.get("/:studioId/rooms", listRooms);
+router.post(
+  "/:studioId/rooms",
   authMiddleware,
-  authorize("studio_manager", "admin"),
-  updateStudio as unknown as RequestHandler
+  // require the user to be owner/manager/staff on the studio
+  requireStudioRole("studioId", ["studio_manager", "studio_staff"]),
+  createRoom
 );
 
-router.delete(
-  "/:id",
-  authMiddleware,
-  authorize("studio_manager", "admin"),
-  deleteStudio as unknown as RequestHandler
-);
+// Room operations
+router.get("/rooms/:roomId", getRoom);
+router.patch("/rooms/:roomId", authMiddleware, requireStudioRole("studioId", ["studio_manager", "studio_staff"]), updateRoom);
+router.delete("/rooms/:roomId", authMiddleware, requireStudioRole("studioId", ["studio_manager", "studio_staff"]), deleteRoom);
+
+// Availability
+router.post("/:studioId/availability", authMiddleware, requireStudioRole("studioId", ["studio_manager", "studio_staff"]), addStudioAvailability);
+router.post("/rooms/:roomId/availability", authMiddleware, requireStudioRole("studioId", ["studio_manager", "studio_staff"]), addRoomAvailability);
 
 export default router;
