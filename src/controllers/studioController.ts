@@ -2,15 +2,19 @@
 import { Request, Response } from "express";
 import prisma from "../prisma/client";
 import { Prisma } from "@prisma/client";
-import { AuthenticatedRequest } from "../types/auth";
-import {
-  CreateStudioInput,
-  UpdateStudioInput,
-  CreateRoomInput,
-  UpdateRoomInput,
-  AvailabilityInput,
-} from "../types/studio";
 import { uploadToCloudinary } from "../utils/cloudinary";
+
+/**
+ * Local Multer file shape
+ */
+type MulterFile = {
+  fieldname?: string;
+  originalname: string;
+  encoding?: string;
+  mimetype?: string;
+  size?: number;
+  buffer: Buffer;
+};
 
 /* -----------------------------------------------------
  *                     STUDIOS
@@ -19,19 +23,15 @@ import { uploadToCloudinary } from "../utils/cloudinary";
 /**
  * Create a new studio (with optional photos)
  */
-export const createStudio = async (req: Request, res: Response) => {
-  const authReq = req as AuthenticatedRequest;
-  if (!authReq.user)
-    return res.status(401).json({ message: "Unauthorized" });
+export const createStudio = async (req: any, res: Response) => {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-  const input = req.body as CreateStudioInput;
-  const files = req.files as Express.Multer.File[] | undefined;
+  const input = req.body;
+  const files = req.files as MulterFile[] | undefined;
 
   try {
     const ownerId =
-      authReq.user.role === "admin" && input.owner_id
-        ? input.owner_id
-        : authReq.user.id;
+      req.user.role === "admin" && input.owner_id ? input.owner_id : req.user.id;
 
     const studio = await prisma.studios.create({
       data: {
@@ -81,7 +81,7 @@ export const createStudio = async (req: Request, res: Response) => {
 /**
  * Return all studios with rooms, owner, gallery
  */
-export const listStudios = async (req: Request, res: Response) => {
+export const listStudios = async (_req: Request, res: Response) => {
   try {
     const studios = await prisma.studios.findMany({
       include: {
@@ -132,14 +132,12 @@ export const getStudio = async (req: Request, res: Response) => {
 /**
  * Update a studio + optionally upload photos
  */
-export const updateStudio = async (req: Request, res: Response) => {
-  const authReq = req as AuthenticatedRequest;
-  if (!authReq.user)
-    return res.status(401).json({ message: "Unauthorized" });
+export const updateStudio = async (req: any, res: Response) => {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
   const id = req.params.id;
-  const input = req.body as UpdateStudioInput;
-  const files = req.files as Express.Multer.File[] | undefined;
+  const input = req.body;
+  const files = req.files as MulterFile[] | undefined;
 
   try {
     await prisma.studios.update({
@@ -206,13 +204,11 @@ export const deleteStudio = async (req: Request, res: Response) => {
  *                     ROOMS
  * --------------------------------------------------- */
 
-export const createRoom = async (req: Request, res: Response) => {
-  const authReq = req as AuthenticatedRequest;
-  if (!authReq.user)
-    return res.status(401).json({ message: "Unauthorized" });
+export const createRoom = async (req: any, res: Response) => {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
   const studioId = req.params.studioId;
-  const input = req.body as CreateRoomInput;
+  const input = req.body;
 
   try {
     const room = await prisma.rooms.create({
@@ -268,7 +264,7 @@ export const getRoom = async (req: Request, res: Response) => {
 
 export const updateRoom = async (req: Request, res: Response) => {
   const id = req.params.roomId;
-  const input = req.body as UpdateRoomInput;
+  const input = req.body;
 
   try {
     const updated = await prisma.rooms.update({
@@ -314,13 +310,11 @@ export const deleteRoom = async (req: Request, res: Response) => {
  *                AVAILABILITY
  * --------------------------------------------------- */
 
-export const addStudioAvailability = async (req: Request, res: Response) => {
-  const authReq = req as AuthenticatedRequest;
-  if (!authReq.user)
-    return res.status(401).json({ message: "Unauthorized" });
+export const addStudioAvailability = async (req: any, res: Response) => {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
   const studioId = req.params.studioId;
-  const input = req.body as AvailabilityInput;
+  const input = req.body;
 
   try {
     const availability = await prisma.studio_availability.create({
@@ -339,13 +333,11 @@ export const addStudioAvailability = async (req: Request, res: Response) => {
   }
 };
 
-export const addRoomAvailability = async (req: Request, res: Response) => {
-  const authReq = req as AuthenticatedRequest;
-  if (!authReq.user)
-    return res.status(401).json({ message: "Unauthorized" });
+export const addRoomAvailability = async (req: any, res: Response) => {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
   const roomId = req.params.roomId;
-  const input = req.body as AvailabilityInput;
+  const input = req.body;
 
   try {
     const availability = await prisma.room_availability.create({

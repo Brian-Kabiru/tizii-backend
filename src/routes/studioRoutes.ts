@@ -21,7 +21,9 @@ import { authMiddleware } from "../middleware/authMiddleware";
 import { authorize } from "../middleware/authorize";
 import { requireStudioRole } from "../middleware/requireStudioRole";
 
+// FIX: No Multer typings from Express, no global Express namespace references
 const upload = multer();
+
 const router = Router();
 
 /* -----------------------------------------------------
@@ -35,25 +37,22 @@ router.get("/:id", getStudio);
  *                  STUDIO CRUD
  * --------------------------------------------------- */
 
-// Create studio (Admin or Studio Owner)
 router.post(
   "/",
   authMiddleware,
   authorize(["admin", "studio_owner"]),
-  upload.array("photos"),
+  upload.array("photos"), // FIX: No type annotation
   createStudio
 );
 
-// Update studio (Only the studio owner)
 router.patch(
   "/:id",
   authMiddleware,
   requireStudioRole("id", ["studio_owner"]),
-  upload.array("photos"),
+  upload.array("photos"), // FIX: No type annotation
   updateStudio
 );
 
-// Delete studio (Only the studio owner)
 router.delete(
   "/:id",
   authMiddleware,
@@ -62,13 +61,11 @@ router.delete(
 );
 
 /* -----------------------------------------------------
- *                   ROOMS (SCOPED TO STUDIO)
+ *                   ROOMS
  * --------------------------------------------------- */
 
-// List rooms for a studio
 router.get("/:studioId/rooms", listRooms);
 
-// Create a room (studio manager, staff, or owner)
 router.post(
   "/:studioId/rooms",
   authMiddleware,
@@ -77,13 +74,11 @@ router.post(
 );
 
 /* -----------------------------------------------------
- *                     ROOM CRUD
+ *                   ROOM CRUD
  * --------------------------------------------------- */
 
-// Get a room
 router.get("/rooms/:roomId", getRoom);
 
-// Update a room
 router.patch(
   "/rooms/:roomId",
   authMiddleware,
@@ -91,7 +86,6 @@ router.patch(
   updateRoom
 );
 
-// Delete a room
 router.delete(
   "/rooms/:roomId",
   authMiddleware,
@@ -100,10 +94,9 @@ router.delete(
 );
 
 /* -----------------------------------------------------
- *                  AVAILABILITY
+ *                 AVAILABILITY
  * --------------------------------------------------- */
 
-// Set studio availability
 router.post(
   "/:studioId/availability",
   authMiddleware,
@@ -111,7 +104,6 @@ router.post(
   addStudioAvailability
 );
 
-// Set room availability
 router.post(
   "/rooms/:roomId/availability",
   authMiddleware,

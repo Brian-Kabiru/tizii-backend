@@ -1,4 +1,8 @@
-// src/types/studio.ts
+import { MulterFile } from "./files";
+
+/* -----------------------------------------------------
+ *                    STUDIO INPUT
+ * --------------------------------------------------- */
 
 export interface CreateStudioInput {
   /** Studio name */
@@ -17,7 +21,7 @@ export interface CreateStudioInput {
   amenities?: string[];
 
   /** Multer uploaded photo files */
-  photos?: Express.Multer.File[];
+  photos?: MulterFile[];
 
   /** Tizii's system paybill (optional override) */
   tizii_paybill?: string;
@@ -65,7 +69,7 @@ export interface UpdateStudioInput {
   payout_account?: Record<string, any> | null;
 
   /** New uploaded photos (optional) */
-  photos?: Express.Multer.File[];
+  photos?: MulterFile[];
 }
 
 /* -----------------------------------------------------
@@ -92,7 +96,7 @@ export interface CreateRoomInput {
   equipment?: string[];
 
   /** Optional room photo uploads */
-  photos?: Express.Multer.File[];
+  photos?: MulterFile[];
 }
 
 export interface UpdateRoomInput {
@@ -108,7 +112,7 @@ export interface UpdateRoomInput {
   equipment?: string[];
 
   /** Additional photos */
-  photos?: Express.Multer.File[];
+  photos?: MulterFile[];
 }
 
 /* -----------------------------------------------------
