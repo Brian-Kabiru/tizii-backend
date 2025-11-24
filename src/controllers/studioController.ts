@@ -209,6 +209,7 @@ export const createRoom = async (req: any, res: Response) => {
 
   const studioId = req.params.studioId;
   const input = req.body;
+  const files = req.files as MulterFile[] | undefined;
 
   try {
     const room = await prisma.rooms.create({
@@ -226,45 +227,41 @@ export const createRoom = async (req: any, res: Response) => {
       },
     });
 
-    res.status(201).json({ room });
+    // Upload photos if present
+    if (files?.length) {
+      await Promise.all(
+        files.map(async (file) => {
+          const url = await uploadToCloudinary(file.buffer);
+          await prisma.room_photos.create({
+            data: {
+              room_id: room.id,
+              url,
+              alt_text: file.originalname,
+            },
+          });
+        })
+      );
+    }
+
+    // Return room with photos
+    const fullRoom = await prisma.rooms.findUnique({
+      where: { id: room.id },
+      include: { photos: true },
+    });
+
+    res.status(201).json({ room: fullRoom });
   } catch (err) {
     console.error("createRoom error", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-export const listRooms = async (req: Request, res: Response) => {
-  const studioId = req.params.studioId;
-  try {
-    const rooms = await prisma.rooms.findMany({
-      where: { studio_id: studioId },
-    });
+export const updateRoom = async (req: any, res: Response) => {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-    res.json({ rooms });
-  } catch (err) {
-    console.error("listRooms error", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-export const getRoom = async (req: Request, res: Response) => {
-  const id = req.params.roomId;
-
-  try {
-    const room = await prisma.rooms.findUnique({ where: { id } });
-
-    if (!room) return res.status(404).json({ message: "Room not found" });
-
-    res.json({ room });
-  } catch (err) {
-    console.error("getRoom error", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-export const updateRoom = async (req: Request, res: Response) => {
   const id = req.params.roomId;
   const input = req.body;
+  const files = req.files as MulterFile[] | undefined;
 
   try {
     const updated = await prisma.rooms.update({
@@ -273,9 +270,7 @@ export const updateRoom = async (req: Request, res: Response) => {
         name: input.name ?? undefined,
         description: input.description ?? undefined,
         type: input.type ?? undefined,
-        hourly_rate: input.hourly_rate
-          ? String(input.hourly_rate)
-          : undefined,
+        hourly_rate: input.hourly_rate ? String(input.hourly_rate) : undefined,
         overnight_rate:
           input.overnight_rate !== undefined
             ? input.overnight_rate === null
@@ -287,9 +282,60 @@ export const updateRoom = async (req: Request, res: Response) => {
       },
     });
 
-    res.json({ room: updated });
+    // Handle new photo uploads
+    if (files?.length) {
+      await Promise.all(
+        files.map(async (file) => {
+          const url = await uploadToCloudinary(file.buffer);
+          await prisma.room_photos.create({
+            data: {
+              room_id: id,
+              url,
+              alt_text: file.originalname,
+            },
+          });
+        })
+      );
+    }
+
+    // Return updated room with photos
+    const fullRoom = await prisma.rooms.findUnique({
+      where: { id },
+      include: { photos: true },
+    });
+
+    res.json({ room: fullRoom });
   } catch (err) {
     console.error("updateRoom error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const listRooms = async (req: Request, res: Response) => {
+  const studioId = req.params.studioId;
+  try {
+    const rooms = await prisma.rooms.findMany({
+      where: { studio_id: studioId },
+      include: { photos: true }, // optional, include photos
+    });
+    res.json({ rooms });
+  } catch (err) {
+    console.error("listRooms error", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getRoom = async (req: Request, res: Response) => {
+  const id = req.params.roomId;
+  try {
+    const room = await prisma.rooms.findUnique({
+      where: { id },
+      include: { photos: true }, // optional, include photos
+    });
+    if (!room) return res.status(404).json({ message: "Room not found" });
+    res.json({ room });
+  } catch (err) {
+    console.error("getRoom error", err);
     res.status(500).json({ message: "Server error" });
   }
 };

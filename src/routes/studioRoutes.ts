@@ -70,6 +70,7 @@ router.post(
   "/:studioId/rooms",
   authMiddleware,
   requireStudioRole("studioId", ["studio_owner", "studio_manager", "studio_staff"]),
+  upload.array("photos"),
   createRoom
 );
 
@@ -83,6 +84,7 @@ router.patch(
   "/rooms/:roomId",
   authMiddleware,
   requireStudioRole("roomId", ["studio_owner", "studio_manager", "studio_staff"]),
+  upload.array("photos"),
   updateRoom
 );
 
