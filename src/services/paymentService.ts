@@ -69,11 +69,21 @@ export const updatePaymentStatus = async (
     data: { status, raw_response: response ?? undefined },
   });
 
-  // Auto-confirm booking if payment succeeded
+  // Handle booking status based on payment outcome
   if (status === "success" && payment.booking_id) {
     await prisma.bookings.update({
       where: { id: payment.booking_id },
       data: { status: "confirmed" },
+    });
+  } else if (status === "failed" && payment.booking_id) {
+    await prisma.bookings.update({
+      where: { id: payment.booking_id },
+      data: { status: "cancelled" },
+    });
+
+    // Optionally, release slots if payment fails
+    await prisma.booking_slots.deleteMany({
+      where: { booking_id: payment.booking_id },
     });
   }
 

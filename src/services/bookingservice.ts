@@ -51,7 +51,7 @@ export const createBooking = async (input: CreateBookingInput & { payment_method
     if (!available) throw new Error("Room not available for selected time slot");
   }
 
-  // Create booking
+  // Create booking with "reserved" status for online payments
   const booking = await prisma.bookings.create({
     data: {
       artist_id,
@@ -64,7 +64,7 @@ export const createBooking = async (input: CreateBookingInput & { payment_method
       currency: currency ?? "KES",
       notes: notes ?? null,
       collaborators: collaborators ?? Prisma.JsonNull,
-      status: payment_method === "offline" ? "confirmed" : "pending",
+      status: payment_method === "offline" ? "confirmed" : "reserved",
     },
   });
 
