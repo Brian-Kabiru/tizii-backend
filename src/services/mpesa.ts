@@ -19,7 +19,7 @@ if (!MPESA_CONSUMER_KEY || !MPESA_CONSUMER_SECRET || !MPESA_PASSKEY || !MPESA_CA
 
 const SANDBOX_BASE_URL = "https://sandbox.safaricom.co.ke";
 const PROD_BASE_URL = "https://api.safaricom.co.ke";
-const BASE_URL = NODE_ENV === "production" ? PROD_BASE_URL : SANDBOX_BASE_URL;
+const BASE_URL = process.env.MPESA_BASE_URL!;
 
 // -------------------- Access Token --------------------
 export const getMpesaAccessToken = async (): Promise<string> => {

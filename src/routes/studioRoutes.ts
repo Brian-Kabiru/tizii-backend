@@ -48,7 +48,7 @@ router.post(
 router.patch(
   "/:id",
   authMiddleware,
-  requireStudioRole("id", ["studio_owner"]),
+  requireStudioRole("id", ["admin", "studio_owner"]),
   upload.array("photos"), // FIX: No type annotation
   updateStudio
 );
@@ -56,7 +56,7 @@ router.patch(
 router.delete(
   "/:id",
   authMiddleware,
-  requireStudioRole("id", ["studio_owner"]),
+  requireStudioRole("id", ["admin", "studio_owner"]),
   deleteStudio
 );
 
@@ -69,7 +69,7 @@ router.get("/:studioId/rooms", listRooms);
 router.post(
   "/:studioId/rooms",
   authMiddleware,
-  requireStudioRole("studioId", ["studio_owner", "studio_manager", "studio_staff"]),
+  requireStudioRole("studioId", ["admin", "studio_owner", "studio_manager", "studio_staff"]),
   upload.array("photos"),
   createRoom
 );
@@ -83,7 +83,7 @@ router.get("/rooms/:roomId", getRoom);
 router.patch(
   "/rooms/:roomId",
   authMiddleware,
-  requireStudioRole("roomId", ["studio_owner", "studio_manager", "studio_staff"]),
+  requireStudioRole("roomId", ["admin", "studio_owner", "studio_manager", "studio_staff"]),
   upload.array("photos"),
   updateRoom
 );
@@ -91,7 +91,7 @@ router.patch(
 router.delete(
   "/rooms/:roomId",
   authMiddleware,
-  requireStudioRole("roomId", ["studio_owner", "studio_manager", "studio_staff"]),
+  requireStudioRole("roomId", ["admin", "studio_owner", "studio_manager", "studio_staff"]),
   deleteRoom
 );
 
