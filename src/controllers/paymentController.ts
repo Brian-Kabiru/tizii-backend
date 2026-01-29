@@ -21,7 +21,7 @@ export const createPaymentController = async (req: Request, res: Response) => {
  */
 export const updatePaymentStatusController = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const { status, response } = req.body;
     const payment = await updatePaymentStatus(id, status, response);
     res.json(payment);
@@ -37,7 +37,7 @@ export const updatePaymentStatusController = async (req: Request, res: Response)
  */
 export const getPaymentByIdController = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const payment = await prisma.payments.findUnique({ where: { id } });
 
     if (!payment) {

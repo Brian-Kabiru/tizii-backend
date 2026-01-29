@@ -52,7 +52,7 @@ export const getBookings = async (req: AuthenticatedRequest, res: Response) => {
 // ---------------------- GET /bookings/:id ----------------------
 export const getBookingById = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
 
     const booking = await prisma.bookings.findUnique({
       where: { id },
@@ -173,7 +173,7 @@ export const createBooking = async (req: AuthenticatedRequest, res: Response) =>
 // ---------------------- PATCH /bookings/:id ----------------------
 export const updateBooking = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const booking = await bookingServiceUpdateBooking(id, req.body);
     res.json({ message: "Booking updated successfully", booking });
   } catch (error: any) {
@@ -185,7 +185,7 @@ export const updateBooking = async (req: AuthenticatedRequest, res: Response) =>
 // ---------------------- PATCH /bookings/:id/status ----------------------
 export const updateBookingStatus = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const { status } = req.body as { status: "pending" | "confirmed" | "completed" | "cancelled" };
 
     if (!["pending", "confirmed", "completed", "cancelled"].includes(status)) {
@@ -211,7 +211,7 @@ export const updateBookingStatus = async (req: AuthenticatedRequest, res: Respon
 export const deleteBooking = async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (req.user?.role !== "admin") return res.status(403).json({ error: "Forbidden" });
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     await prisma.bookings.delete({ where: { id } });
     res.json({ message: "Booking deleted successfully" });
   } catch (error) {

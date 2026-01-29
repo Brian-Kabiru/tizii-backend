@@ -29,14 +29,34 @@ export const createPayment = async (input: CreatePaymentInput) => {
     },
   });
 
+  // Add logging to debug STK Push issues
+  console.log("Creating payment with input:", input);
+
   if (provider === "tizii_paybill") {
-    if (!phone_number) throw new Error("Phone number required for Mpesa payment");
+    if (!phone_number) {
+      console.error("Phone number is required for Mpesa payment");
+      throw new Error("Phone number required for Mpesa payment");
+    }
 
     const booking = await prisma.bookings.findUnique({ where: { id: booking_id } });
-    if (!booking) throw new Error("Booking not found");
+    if (!booking) {
+      console.error("Booking not found for ID:", booking_id);
+      throw new Error("Booking not found");
+    }
 
     const studio = await prisma.studios.findUnique({ where: { id: booking.studio_id } });
-    if (!studio) throw new Error("Studio not found");
+    if (!studio) {
+      console.error("Studio not found for ID:", booking.studio_id);
+      throw new Error("Studio not found");
+    }
+
+    console.log("Initiating STK Push with data:", {
+      amount: Number(amount),
+      phoneNumber: phone_number,
+      accountReference: booking.id,
+      transactionDesc: `Booking at ${studio.name}`,
+      businessShortCode: studio.tizii_paybill || process.env.MPESA_BUSINESS_SHORTCODE || "",
+    });
 
     const stkResponse: STKPushResponse = await initiateSTKPush({
       amount: Number(amount),
@@ -45,6 +65,8 @@ export const createPayment = async (input: CreatePaymentInput) => {
       transactionDesc: `Booking at ${studio.name}`,
       businessShortCode: studio.tizii_paybill || process.env.MPESA_BUSINESS_SHORTCODE || "",
     });
+
+    console.log("STK Push response:", stkResponse);
 
     // Update payment record with CheckoutRequestID
     await prisma.payments.update({

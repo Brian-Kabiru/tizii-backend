@@ -40,7 +40,9 @@ export const createStudio = async (req: any, res: Response) => {
         description: input.description || null,
         location: input.location || null,
         timezone: input.timezone ?? "Africa/Nairobi",
-        amenities: input.amenities ?? [],
+        amenities: Array.isArray(input.amenities)
+          ? input.amenities
+          : JSON.parse(input.amenities || "[]"), // Ensure array of strings
         tizii_paybill: input.tizii_paybill ?? null,
         studio_paybill: input.studio_paybill ?? null,
         till_number: input.till_number ?? null,
@@ -102,7 +104,7 @@ export const listStudios = async (_req: Request, res: Response) => {
  * Get a single studio with rooms, availability, staff, gallery
  */
 export const getStudio = async (req: Request, res: Response) => {
-  const id = req.params.id;
+  const id = req.params.id as string;
 
   try {
     const studio = await prisma.studios.findUnique({
@@ -189,7 +191,7 @@ export const updateStudio = async (req: any, res: Response) => {
  * Delete a studio
  */
 export const deleteStudio = async (req: Request, res: Response) => {
-  const id = req.params.id;
+  const id = req.params.id as string;
 
   try {
     await prisma.studios.delete({ where: { id } });
@@ -222,8 +224,10 @@ export const createRoom = async (req: any, res: Response) => {
         overnight_rate: input.overnight_rate
           ? String(input.overnight_rate)
           : null,
-        visible: input.visible ?? true,
-        equipment: input.equipment ?? [],
+        visible: input.visible === "true" || input.visible === true, // Ensure boolean value
+        equipment: Array.isArray(input.equipment)
+          ? input.equipment
+          : JSON.parse(input.equipment || "[]"), // Ensure array of strings
       },
     });
 
@@ -312,7 +316,7 @@ export const updateRoom = async (req: any, res: Response) => {
 };
 
 export const listRooms = async (req: Request, res: Response) => {
-  const studioId = req.params.studioId;
+  const studioId = req.params.studioId as string;
   try {
     const rooms = await prisma.rooms.findMany({
       where: { studio_id: studioId },
@@ -326,7 +330,7 @@ export const listRooms = async (req: Request, res: Response) => {
 };
 
 export const getRoom = async (req: Request, res: Response) => {
-  const id = req.params.roomId;
+  const id = req.params.roomId as string;
   try {
     const room = await prisma.rooms.findUnique({
       where: { id },
@@ -341,7 +345,7 @@ export const getRoom = async (req: Request, res: Response) => {
 };
 
 export const deleteRoom = async (req: Request, res: Response) => {
-  const id = req.params.roomId;
+  const id = req.params.roomId as string;
 
   try {
     await prisma.rooms.delete({ where: { id } });

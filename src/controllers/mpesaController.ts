@@ -10,21 +10,28 @@ export const mpesaCallbackController = async (req: Request, res: Response) => {
   try {
     const data = req.body;
 
+    console.log("Received Mpesa callback:", JSON.stringify(data, null, 2));
+
     // Validate callback data
     const checkoutRequestID = data?.Body?.stkCallback?.CheckoutRequestID;
     const resultCode = data?.Body?.stkCallback?.ResultCode;
     const callbackMetadata = data?.Body?.stkCallback?.CallbackMetadata;
 
     if (!checkoutRequestID) {
-      console.warn("Missing CheckoutRequestID in callback");
+      console.warn("Missing CheckoutRequestID in callback", data);
       return res.status(400).json({ message: "No CheckoutRequestID" });
     }
 
+    console.log("Looking for payment with CheckoutRequestID:", checkoutRequestID);
+
     const payment = await prisma.payments.findFirst({ where: { provider_reference: checkoutRequestID } });
     if (!payment) {
-      console.warn(`Payment not found for CheckoutRequestID: ${checkoutRequestID}`);
+      console.warn(`Payment not found for CheckoutRequestID: ${checkoutRequestID}`, data);
       return res.status(404).json({ message: "Payment not found" });
     }
+
+    console.log("Payment found:", payment);
+    console.log("ResultCode:", resultCode, "CallbackMetadata:", callbackMetadata);
 
     const status = resultCode === 0 ? "success" : "failed";
 
@@ -42,6 +49,12 @@ export const mpesaCallbackController = async (req: Request, res: Response) => {
       });
       console.log(`Booking ${payment.booking_id} confirmed after successful payment.`);
     } else if (status === "failed") {
+      console.warn(`Payment failed for CheckoutRequestID: ${checkoutRequestID}`);
+    }
+
+    if (status === "success") {
+      console.log(`Payment successful for CheckoutRequestID: ${checkoutRequestID}`);
+    } else {
       console.warn(`Payment failed for CheckoutRequestID: ${checkoutRequestID}`);
     }
 
